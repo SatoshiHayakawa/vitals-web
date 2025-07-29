@@ -27,17 +27,15 @@ jobs:
         with:
           fetch-depth: 0
       
-      # ←★ ここにテスト用ステップを追加
-      - name: Quick check Anthropic key
+      - name: Quick check Anthropic key (verbose)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          curl -f -s -X POST https://api.anthropic.com/v1/messages \
-            -H "x-api-key:${ANTHROPIC_API_KEY}" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
-            -d '{"model":"claude-3-5-haiku-latest","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}'
-      
+          curl -v -X POST https://api.anthropic.com/v1/messages \
+          -H "x-api-key:${ANTHROPIC_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "content-type: application/json" \
+          -d '{"model":"claude-3-5-haiku-latest","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}'
 
       - name: Run Claude Code Action
         uses: anthropics/claude-code-action@beta
