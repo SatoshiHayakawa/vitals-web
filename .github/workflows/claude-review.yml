@@ -1,28 +1,70 @@
-name: Claude Code Review
+name: AI Code Review and Assistance
 
 on:
   pull_request:
     types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled]
 
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
-  ai-review:
+  # 基本的なClaude Code Action（@claudeメンションに反応）
+  claude-tag-mode:
+    name: Claude Interactive Assistant
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude')
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Claude Code Review
-        uses: anthropics/claude-code-action@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-opus-4-20250514
-          task: |
-            このPRをレビューしてください。
-            特に以下の観点で確認：
-            1. Next.js 14のベストプラクティス
+          fetch-depth: 0
+      
+      - name: Run Claude Code Action
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # mode: tag がデフォルト
+          # allowed_tools は必要に応じて設定
+
+  # 自動コードレビュー（PRが開かれた時）
+  auto-review:
+    name: Automatic PR Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          separator: ","
+      
+      - name: Auto Review by Claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          mode: agent  # エージェントモード（自動実行）
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          override_prompt: |
+            このプルリクエストをレビューしてください。
+            
+            変更されたファイル: ${{ steps.changed-files.outputs.all_changed_files }}
+            
+            以下の観点で確認してください：
+            1. Next.js 15のベストプラクティス
             2. TypeScriptの型安全性
             3. パフォーマンスの最適化
             4. セキュリティの問題
+            5. Vitalsプロジェクトの要件との整合性
+            
+            問題がある場合は具体的な改善案を提示してください。
