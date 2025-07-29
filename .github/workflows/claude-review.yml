@@ -14,8 +14,12 @@ permissions:
   pull-requests: write
   issues: write
   id-token: write
+  actions: read
+  secrets: read
 
 jobs:
+  env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   # 基本的なClaude Code Action（@claudeメンションに反応）
   claude-tag-mode:
     name: Claude Interactive Assistant
