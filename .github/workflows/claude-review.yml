@@ -1,28 +1,79 @@
-name: Claude Code Review
+name: AI Code Review and Assistance
 
 on:
   pull_request:
     types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled]
 
 permissions:
   contents: read
   pull-requests: write
+  issues: write
+  id-token: write
 
 jobs:
-  ai-review:
+  claude-tag-mode:
+    name: Claude Interactive Assistant
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude')
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Claude Code Review
-        uses: anthropics/claude-code-action@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-opus-4-20250514
-          task: |
-            このPRをレビューしてください。
-            特に以下の観点で確認：
-            1. Next.js 14のベストプラクティス
+          fetch-depth: 0
+      
+      - name: Quick check Anthropic key (verbose)
+        env:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          curl -v -X POST https://api.anthropic.com/v1/messages \
+          -H "x-api-key:${claude_code_oauth_token}" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "content-type: application/json" \
+          -d '{"model":"claude-3-5-haiku-latest","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}'
+
+      - name: Run Claude Code Action
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  auto-review:
+    name: Automatic PR Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          separator: ","
+
+      - name: Auto Review by Claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          mode: agent
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          override_prompt: |
+            このプルリクエストをレビューしてください。
+            
+            変更されたファイル: ${{ steps.changed-files.outputs.all_changed_files }}
+            
+            以下の観点で確認してください：
+            1. Next.js 15のベストプラクティス
             2. TypeScriptの型安全性
             3. パフォーマンスの最適化
             4. セキュリティの問題
+            5. Vitalsプロジェクトの要件との整合性
+            
+            問題がある場合は具体的な改善案を提示してください。
+
